@@ -20,17 +20,18 @@ logging.basicConfig(
 logger = logging.getLogger("semkad")
 
 
-SIM_QUERY_INTERVAL = 5.0
+SIM_QUERY_INTERVAL = 2.0
 SIM_NETWORK_SIZE = 70
 MAX_NODE_BOOTSTRAP_NODES = 2
 EMBED_DIM = 512
+# EMBED_DIM = 256
 CHAOS_INTERVAL = 8
 
 
 def seed_demo_data(network, embed_dim):
     samples = [
         "A distributed hash table stores values under unique keys across a decentralized overlay network.",
-        "An epidemic gossip protocol spreads updates between peers through repeated local exchanges.",
+        "An epidemic gossip message spreads updates across nodes through repeated local exchanges.",
         "A neural embedding encodes sentences into vectors and compares them using cosine similarity.",
         "A count sketch compresses character ngrams into a fixed size vector using hashed signed buckets.",
         "Breadth first search explores a graph by visiting vertices level by level from a starting node.",
@@ -65,31 +66,22 @@ def vectorize_queries(embed_dim):
     queries = [
         "how does a distributed hash table store values by key",
         "decentralized overlay lookup of values using a hash table",
-
-        "how do gossip protocols spread updates between peers",
+        "how do gossip protocols spread epidemic updates across nodes",
         "epidemic gossip message dissemination across neighboring nodes",
-
         "compare sentences using vector embeddings and cosine similarity",
         "how are texts represented in a neural embedding space",
-
         "how does count sketch compress character ngrams into buckets",
         "signed hashing of text features into a fixed size vector",
-
         "graph traversal using breadth first search by levels",
         "visit nodes layer by layer starting from a root vertex",
-
         "least recently used cache eviction under memory pressure",
         "evicts stale entries when cache capacity is exceeded",
-
         "prevent race conditions using mutex locking",
         "synchronize threads accessing shared state safely",
-
         "how does an inverted index support document retrieval",
         "posting lists mapping terms to documents in search systems",
-
         "represent facts as subject predicate object triples",
         "entity linking encoded in a knowledge graph",
-
         "probabilistic membership test with bloom filter false positives",
         "compact bit array structure for approximate set membership",
     ]
@@ -160,48 +152,12 @@ def chaos_monkey(network):
 
 
 def run_query_loop(network, keyed_queries):
-    # live_nodes = network.live_nodes()
-    # if not live_nodes:
-    #     return
-    # requester = random.choice(live_nodes)
     while True:
         live_nodes = network.live_nodes()
         if not live_nodes:
             continue
         requester = random.choice(live_nodes)
-
-        print("#" * 80)
-        # for pair in keyed_queries:
-        #     query_text, vector_hex = pair
-
-        #     qid = str(uuid.uuid4())
-        #     requester.post(
-        #         {
-        #             "type": "SEARCH",
-        #             "key": vector_hex,
-        #             "query_id": qid,
-        #             "text" : query_text
-        #         }
-        #     )
-
-        #     # for r in sorted(requester.routing_table):
-        #     #     print(hash_to_ip(r))
-        #     #     print("leeeeeeen", )
-        #     logger.info(
-        #         "node=%s [QUERY %s - %s] key=%s rtSize=%d rtHAsh=%s",
-        #         requester.short_id,
-        #         qid[:8],
-        #         query_text[:80],
-        #         str_abbr_hash(vector_hex),
-        #         len(requester.routing_table),
-        #         str_abbr_hash(str(sorted(requester.routing_table)))
-        #     )
-
-
-
-
         query_text, vector_hex = random.choice(keyed_queries)
-
         qid = str(uuid.uuid4())
         requester.post(
             {
@@ -215,11 +171,9 @@ def run_query_loop(network, keyed_queries):
             requester.short_id,
             qid[:8],
             query_text[:80],
-            str_abbr_hash(vector_hex)
+            str_abbr_hash(vector_hex),
         )
-        
         time.sleep(SIM_QUERY_INTERVAL)
-        # print("#" * 80)
 
 
 if __name__ == "__main__":
@@ -227,8 +181,6 @@ if __name__ == "__main__":
     keyed_queries = vectorize_queries(EMBED_DIM)
     network = Network()
     init_nodes(network)
-    
     seed_demo_data(network, EMBED_DIM)
-    
-    # threading.Thread(target=chaos_monkey, args=(network,), daemon=True).start()
+    threading.Thread(target=chaos_monkey, args=(network,), daemon=True).start()
     run_query_loop(network, keyed_queries)

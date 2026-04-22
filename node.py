@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 import threading
 import time
 import random
@@ -13,43 +12,17 @@ import logging
 
 logger = logging.getLogger("semkad")
 
-# max number of peers kept in the local routing table (candidate pool)
 MAX_ROUTING_TABLE_SIZE = 20
-
-# number of most similar (nearest in embedding space) nodes used as final targets for lookups (FIND_NODE results) and data replication (STORE)
 K = 2
-
-# number of parallel lookup queries per iteration (lookup fan-out);# controls search breadth vs. network traffic
 ALPHA = 3
-
-# delay between lookup iterations (gives time for responses to arrive)
 LOOKUP_STEP_DELAY = 0.08
-
-# interval for periodic node statistics logging
-STATS_LOG_INTERVAL = 5.0
-
-# interval for periodic node statistics logging
 FIND_VALUE_TTL = MAX_ROUTING_TABLE_SIZE
-
-# interval for periodic node statistics logging
 FIND_NODES_TTL = 3
-
-# how long stored data is considered valid before expiration
 DATA_TTL = 60.0
-
-# interval for routing table refresh and republishing decisions
 REFRESH_INTERVAL = DATA_TTL / 2.1
-
-# timeout for inbox.get(); keeps event loop responsive without busy-waiting
 QUEUE_MSG_SOFT_TIMEOUT = 0.1
-
-# time window for deduplicating FIND_VALUE responses
 RESPONSE_DEDUP_TTL = 30.0
-
-# time window for deduplicating FIND_VALUE queries
 QUERY_DEDUP_TTL = 20.0
-
-# minimum cosine similarity to consider a value a valid match
 QUERY_THRESHOLD = 0.4
 
 
@@ -151,8 +124,7 @@ class Node:
                     "ttl": ttl,
                 },
             )
-            # TODO?
-            self.stop_event.wait(LOOKUP_STEP_DELAY)
+        self.stop_event.wait(LOOKUP_STEP_DELAY)
 
     def _store(self, key, value):
         if self.stop_event.is_set():
@@ -164,10 +136,7 @@ class Node:
             self.data_store[key] = {"value": value, "stored_at": time.time()}
             return
         for node_id in targets:
-            # TODO ?
             self._add_node(node_id)
-            self.network.send(node_id, {"type" : "ADD_NODE", "node_id" : self.node_id})
-
             self.network.send(
                 node_id,
                 {
@@ -237,7 +206,7 @@ class Node:
         # internal msgs
         #####################################################
         sender_id = msg["from"]
-        # TODO ?
+        # In Kademlia this makes sense, here it injects noise into semantic routing (built by queries)
         # self._add_node(sender_id)
         if msg_type == "GET_CLOSEST_ROUTES":
             target_id = msg["target_id"]
@@ -287,14 +256,13 @@ class Node:
                         self._iterative_improve_routing_towards(
                             target_id, peer_nid, msg["ttl"]
                         )
-                        #TODO ?
                         self._add_node(peer_nid)
-                        # self.network.send(peer_nid, {"type" : "ADD_NODE", "node_id" : self.node_id})
             return
 
         if msg_type == "LOCAL_STORE":
             key = msg["key"]
             value = msg["value"]
+            self._add_node(sender_id)
             self.last_query_key = key
             self.data_store[key] = {"value": value, "stored_at": time.time()}
             return
@@ -352,9 +320,7 @@ class Node:
                         "max_ttl": FIND_VALUE_TTL,
                     },
                 )
-                # TODO ?
                 self.network.send(origin, {"type": "ADD_NODE", "node_id": self.node_id})
-                self._add_node(origin)
                 return
 
             visited = set(msg.get("visited", []))
@@ -394,9 +360,7 @@ class Node:
             return
 
         if msg_type == "LOCAL_FIND_VALUE_RESPONSE":
-            # TODO ?
             self._add_node(sender_id)
-            self.network.send(sender_id, {"type": "ADD_NODE", "node_id": self.node_id})
             self.last_query_key = msg["key"]
             resp_marker = (msg["query_id"], msg["key"])
             if resp_marker in self.seen_find_value_responses:
@@ -453,7 +417,6 @@ class Node:
                 del self.data_store[key]
 
             for key, item in list(self.data_store.items()):
-                # TODO
                 self._iterative_improve_routing_towards(
                     key, self.node_id, FIND_NODES_TTL
                 )
@@ -465,63 +428,35 @@ class Node:
                 candidates.add(self.node_id)
                 closest = sorted(candidates, key=lambda nid: cosine_dist(nid, key))[:K]
                 for node_id in closest:
-                    logger.debug(
+                    self._add_node(node_id)
+                    logger.info(
                         "node=%s republish key=%s to=%s",
                         self.short_id,
                         str_abbr_hash(key),
-                        hash_to_ip(node_id)
+                        hash_to_ip(node_id),
                     )
                     if node_id == self.node_id:
-                        self.data_store[key] = {"value": item["value"], "stored_at": time.time()}
+                        self.data_store[key] = {
+                            "value": item["value"],
+                            "stored_at": time.time(),
+                        }
                     else:
                         self.network.send(
-                        node_id,
-                        {
-                            "type": "LOCAL_STORE",
-                            "from": self.node_id,
-                            "key": key,
-                            "value": item["value"],
-                        },
+                            node_id,
+                            {
+                                "type": "LOCAL_STORE",
+                                "from": self.node_id,
+                                "key": key,
+                                "value": item["value"],
+                            },
                         )
-
-
-                # self._store(key, item["value"])
             return
-
-        if msg_type == "LOCAL_HEARTBEAT":
-            print("stats")
-
-            # logger.info(
-            #     (
-            #         "node=%s activity=%d rtSize=%d dataSize=%d qRecv=%d qFwd=%d qResp=%d "
-            #         "qStarted=%d localHits=%d store_send=%d store_recv=%d "
-            #         "dupQ=%d dupR=%d hopDrop=%d stallDrop=%d"
-            #     ),
-            #     self.short_id,
-            #     s.activity_score(),
-            #     len(self.routing_table),
-            #     len(self.data_store),
-            #     s.recv_find_value,
-            #     s.fwd_find_value,
-            #     s.send_find_value_response,
-            #     s.local_queries_started,
-            #     s.local_lookup_shortcuts,
-            #     s.send_store,
-            #     s.recv_store,
-            #     s.duplicate_queries_dropped,
-            #     s.duplicate_responses_dropped,
-            #     s.hop_limit_dropped,
-            #     s.no_progress_dropped,
-            # )
-            return
-
         logger.critical("node=%s unknown_msg=%s", self.short_id, msg_type)
 
     def _cleanup_loop(self):
         while not self.stop_event.is_set():
             self.stop_event.wait(15.0)
             self.post({"type": "LOCAL_CLEANUP", "from": self.node_id})
-            
 
     def _refresh_buckets(self):
         while not self.stop_event.is_set():
@@ -534,18 +469,11 @@ class Node:
             self.post({"type": "LOCAL_REPUBLISH", "from": self.node_id})
             self.stop_event.wait(DATA_TTL / 2.0)
 
-    def _log_heartbeat(self):
-        while not self.stop_event.is_set():
-            if self.stop_event.wait(STATS_LOG_INTERVAL):
-                break
-            self.post({"type": "LOCAL_HEARTBEAT", "from": self.node_id})
-
     def run(self):
         self._threads = [
             threading.Thread(target=self._refresh_buckets, daemon=True),
             threading.Thread(target=self._republish_data, daemon=True),
             threading.Thread(target=self._cleanup_loop, daemon=True),
-            # threading.Thread(target=self._log_heartbeat, daemon=True),
         ]
         for t in self._threads:
             t.start()
