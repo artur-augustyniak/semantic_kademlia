@@ -206,8 +206,19 @@ class Node:
         # internal msgs
         #####################################################
         sender_id = msg["from"]
-        # In Kademlia this makes sense, here it injects noise into semantic routing (built by queries)
-        # self._add_node(sender_id)
+        '''
+            In Kademlia, this makes sense; in our case, it just injects noise into the current semantic routing.
+            We use it only in special circumstances, i.e., when our routing table is empty due to a massive disappearance of nodes.
+        '''
+        if len(self.routing_table) == 0:
+            logger.critical(
+                "node=%s all.peers.dead unconditionally adding seen node=%s",
+                self.short_id,
+                sender_id
+                )
+
+            self._add_node(sender_id)
+
         if msg_type == "GET_CLOSEST_ROUTES":
             target_id = msg["target_id"]
             originator = msg["originator"]
@@ -341,7 +352,17 @@ class Node:
                     curr_ttl,
                     FIND_VALUE_TTL,
                 )
+                self._prune_dead_routing_entries()
+                if len(self.routing_table) == 0:
+                    self._add_node(sender_id)
+                    logger.critical(
+                        "node=%s [DROP  %s] empty routing table - all peers dead",
+                        self.short_id,
+                        msg["query_id"][:8]
+                    )
+                    return 
                 chosen = [random.choice(list(self.routing_table))]
+
 
             for nid in chosen:
                 self.network.send(
@@ -491,13 +512,13 @@ class Node:
                 self._idle_counter += 1
                 continue
             except Exception as e:
-
                 logger.critical(
                     "node=%s crashed with error=%s",
                     self.short_id,
                     str(e),
                     exc_info=True,
                 )
+                self.stop()
                 break
 
         logger.info("node=%s stopped", self.short_id)

@@ -30,6 +30,7 @@ CHAOS_INTERVAL = 8
 
 def seed_demo_data(network, embed_dim):
     samples = [
+        "A distributed hash table stores values across many nodes in the network.",
         "A distributed hash table stores values under unique keys across a decentralized overlay network.",
         "An epidemic gossip message spreads updates across nodes through repeated local exchanges.",
         "A neural embedding encodes sentences into vectors and compares them using cosine similarity.",
