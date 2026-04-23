@@ -211,13 +211,19 @@ class Node:
             We use it only in special circumstances, i.e., when our routing table is empty due to a massive disappearance of nodes.
         '''
         if len(self.routing_table) == 0:
-            logger.critical(
-                "node=%s all.peers.dead unconditionally adding seen node=%s",
-                self.short_id,
-                hash_to_ip(sender_id)
+            if sender_id != self.node_id:
+                logger.error(
+                    "node=%s all.peers.dead unconditionally adding seen node=%s",
+                    self.short_id,
+                    hash_to_ip(sender_id)
+                )
+                self._add_node(sender_id)
+            else:
+                logger.critical(
+                    "node=%s all.peers.dead waiting for someone...",
+                    self.short_id
                 )
 
-            self._add_node(sender_id)
 
         if msg_type == "GET_CLOSEST_ROUTES":
             target_id = msg["target_id"]
