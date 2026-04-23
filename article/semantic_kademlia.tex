@@ -42,30 +42,30 @@
 
 \makeatother
 
-\usepackage{xurl}
-\urlstyle{same}
-
-\usepackage[bottom,hang,splitrule]{footmisc}
-\setlength{\footnotemargin}{1.2em}
-\renewcommand\footnotelayout{\fontsize{9}{10}\selectfont\raggedright\emergencystretch=1em}
-\setlength{\skip\footins}{6pt}
-\setlength{\footnotesep}{0.4\baselineskip}
-
-
 % \usepackage{xurl}
-% \urlstyle{tt}
+% \urlstyle{same}
 
-% \usepackage[colorlinks=true,
-%             linkcolor=gray,
-%             citecolor=blue,
-%             filecolor=magenta,
-%             urlcolor=gray]{hyperref}
-
-% \usepackage[hang,splitrule]{footmisc}
+% \usepackage[bottom,hang,splitrule]{footmisc}
 % \setlength{\footnotemargin}{1.2em}
-% \renewcommand\footnotelayout{\fontsize{8}{9.5}\selectfont}
+% \renewcommand\footnotelayout{\fontsize{9}{10}\selectfont\raggedright\emergencystretch=1em}
 % \setlength{\skip\footins}{6pt}
-% \setlength{\footnotesep}{0.35\baselineskip}
+% \setlength{\footnotesep}{0.4\baselineskip}
+
+
+\usepackage{xurl}
+\urlstyle{tt}
+
+\usepackage[colorlinks=true,
+            linkcolor=gray,
+            citecolor=blue,
+            filecolor=magenta,
+            urlcolor=gray]{hyperref}
+
+\usepackage[hang,splitrule]{footmisc}
+\setlength{\footnotemargin}{1.2em}
+\renewcommand\footnotelayout{\fontsize{8}{9.5}\selectfont}
+\setlength{\skip\footins}{6pt}
+\setlength{\footnotesep}{0.35\baselineskip}
 
 \begin{document}
 \maketitle
@@ -86,12 +86,12 @@ It turns out that this leads to a working simulation of a network that:
 The full simulation code is available at 
 \url{https://github.com/artur-augustyniak/semantic_kademlia/}.
 
-\vspace{-9pt}
+% \vspace{-9pt}
 \subsection*{Embeddings without heavylifting}
 % \vspace{-6pt}
 
 I did not want to use heavy language models in this toy simulation. 
-Instead\footnote{\url{https://github.com/artur-augustyniak/semantic_kademlia/blob/afa05ea7ea70d76b0a6c4db4cc326a81c3acc764/tooling.py#L65}}, 
+Instead\footnote{\url{https://github.com/artur-augustyniak/semantic_kademlia/blob/afa05ea7ea70d76b0a6c4db4cc326a81c3acc764/tooling.py\#L65}}, 
 I ended up using a Feature Hashing\footnote{\url{https://www.usna.edu/Users/cs/crabbe/SD311/2024/lectures/maps/feature.html}}/CountSketch\footnote{\url{https://proceedings.mlr.press/v139/larsen21a/larsen21a.pdf}} vectorizer.
 
 \algrenewcommand\algorithmicindent{0.6em}
@@ -136,26 +136,26 @@ I ended up using a Feature Hashing\footnote{\url{https://www.usna.edu/Users/cs/c
 The result is not "semantic" in the sense of embedding models\footnote{\url{https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2}} - it is a clever approximation of lexical similarity.
 Texts with similar structure end up close in the vector space, although there is no deeper representation of meaning.
 
-\vspace{-9pt}
-\subsection*{What is actually happening here}
+% \vspace{-9pt}
+\subsection*{What is actually happening here?}
 % \vspace{-6pt}
 
 The XOR metric has strong properties - it imposes a hierarchical structure and enables predictable narrowing of the search space. 
 In embedding space, these properties disappear: the fact that vector $B$ is closer to $C$ than $A$ does not imply that its neighbors will also be closer with respect to $C$. 
 
-I do not expect stable, globally correct routing. I treat the network as an adaptive system that builds its structure through queries and data replication\footnote{\url{https://github.com/artur-augustyniak/semantic_kademlia/blob/afa05ea7ea70d76b0a6c4db4cc326a81c3acc764/node.py#L114}}.
-In local neighborhoods, a form of proximity transitivity often holds, which allows the network to improve answer quality over time\footnote{\url{https://github.com/artur-augustyniak/semantic_kademlia/blob/afa05ea7ea70d76b0a6c4db4cc326a81c3acc764/node.py#L268}}.
+I do not expect stable, globally correct routing. I treat the network as an adaptive system that builds its structure through queries and data replication\footnote{\url{https://github.com/artur-augustyniak/semantic_kademlia/blob/afa05ea7ea70d76b0a6c4db4cc326a81c3acc764/node.py\#L114}}.
+In local neighborhoods, a form of proximity transitivity often holds, which allows the network to improve answer quality over time\footnote{\url{https://github.com/artur-augustyniak/semantic_kademlia/blob/afa05ea7ea70d76b0a6c4db4cc326a81c3acc764/node.py\#L268}}.
 
 The cost is longer search paths: queries require higher TTL values and more often end up in dead ends. However, I expect this effect to be amortized over time - the routing table gradually moves itself toward “hot” regions.
 
-This also motivates one nasty trick: pruning the routing table with respect to the most recently observed query or key\footnote{\url{https://github.com/artur-augustyniak/semantic_kademlia/blob/afa05ea7ea70d76b0a6c4db4cc326a81c3acc764/node.py#L69}}. 
-This helps counteract the drift caused by random exploration, which is necessary to avoid blindness to new nodes\footnote{\url{https://github.com/artur-augustyniak/semantic_kademlia/blob/afa05ea7ea70d76b0a6c4db4cc326a81c3acc764/node.py#L418}}, but at the same time degrades locality.
+This also motivates one nasty trick: pruning the routing table with respect to the most recently observed query or key\footnote{\url{https://github.com/artur-augustyniak/semantic_kademlia/blob/afa05ea7ea70d76b0a6c4db4cc326a81c3acc764/node.py\#L69}}. 
+This helps counteract the drift caused by random exploration, which is necessary to avoid blindness to new nodes\footnote{\url{https://github.com/artur-augustyniak/semantic_kademlia/blob/afa05ea7ea70d76b0a6c4db4cc326a81c3acc764/node.py\#L418}}, but at the same time degrades locality.
 
-These issues become more pronounced as dimensionality increases. The curse of dimensionality\footnote{\url{https://en.wikipedia.org/wiki/Curse_of_dimensionality}} causes distances to become less discriminative, weakening the routing signal. At the same time, higher dimensionality reduces collisions in the embedding, improving representation quality\footnote{\url{https://github.com/artur-augustyniak/semantic_kademlia/blob/afa05ea7ea70d76b0a6c4db4cc326a81c3acc764/main.py#L26}}, 
+These issues become more pronounced as dimensionality increases. The curse of dimensionality\footnote{\url{https://en.wikipedia.org/wiki/Curse_of_dimensionality}} causes distances to become less discriminative, weakening the routing signal. At the same time, higher dimensionality reduces collisions in the embedding, improving representation quality\footnote{\url{https://github.com/artur-augustyniak/semantic_kademlia/blob/afa05ea7ea70d76b0a6c4db4cc326a81c3acc764/main.py\#L26}}, 
 but worsens geometric properties relevant for routing - leading to a trade-off between embedding quality and the “navigability” of the space.
 
 Additionally, unlike classical Kademlia where hashing enforces a near-uniform distribution of data, here semantic clustering emerges naturally, leading to uneven load.
-At the same time, this makes the system manipulable in an interesting way: since node identifiers are vectors, one can deliberately choose an ID that lies close to a particular region of the embedding space, effectively making a node “attract” specific kinds of data.
+At the same time, this makes the system controllable in an interesting way: since node identifiers are vectors, one can deliberately choose an ID that lies close to a particular region of the embedding space, effectively making a node “attract” specific kinds of data.
 
 I came across prior work on similar ideas\footnote{\url{https://gist.github.com/ostafen/a556180db7d4c41abb325b5ae5e13ca4}}\footnote{\url{https://arxiv.org/html/2502.10151v1}}.
 These are significantly more formal and comprehensive than the simple simulation presented here, and they focus on addressing locality and clustering issues.
