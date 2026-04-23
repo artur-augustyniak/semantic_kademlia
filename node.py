@@ -214,7 +214,7 @@ class Node:
             logger.critical(
                 "node=%s all.peers.dead unconditionally adding seen node=%s",
                 self.short_id,
-                sender_id
+                hash_to_ip(sender_id)
                 )
 
             self._add_node(sender_id)

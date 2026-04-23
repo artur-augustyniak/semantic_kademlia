@@ -1,0 +1,195 @@
+% \documentclass[twocolumn, 10pt]{article}
+\documentclass[twocolumn,9pt]{extarticle}
+
+\usepackage{geometry}
+\geometry{
+	a4paper,
+	total={6.85in, 9.92in},
+	left=0.71in,
+	top=0.63in,
+}
+
+% \usepackage{hyperref}
+% \usepackage[hidelinks]{hyperref}
+% \hypersetup{
+%     colorlinks = true,   % Use colored text instead of boxes
+%     linkcolor = gray,    % Color for internal links (e.g., \ref, \cite)
+%     citecolor = blue,    % Color for citations
+%     filecolor = magenta, % Color for file links
+%     urlcolor = gray      % Color for URLs
+% }
+
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{caption}
+
+% pseudocode
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{amsmath}
+
+% % utf
+% \usepackage[T1]{fontenc}
+% \usepackage[utf8]{inputenc}
+% \usepackage[polish]{babel}
+
+\usepackage{enumitem}
+% \setlist{nosep}
+\setlist[itemize]{itemsep=1pt, topsep=1pt, leftmargin=1.2em}
+
+\captionsetup{font={scriptsize}}
+\renewcommand{\footnotesize}{\scriptsize}
+\pagenumbering{gobble}
+
+\title{Semantic Kademlia?}
+\author{Artur Augustyniak}
+
+\makeatletter
+\newcommand{\fsize}{\f@size pt }
+\newcommand{\textFontName}{\f@family}
+
+\renewcommand{\maketitle}{
+\begin{flushleft}
+{\noindent\Huge\bf\@title}\break
+\end{flushleft}
+}
+
+% \renewcommand{\maketitle}{
+% \begin{flushleft}
+% {\noindent\Huge\bfseries\@title}
+% \vspace{1em} % vertical gap
+% \end{flushleft}
+% }
+
+\makeatother
+\usepackage{xurl}                    % better URL breaking
+\urlstyle{tt}
+
+% ---- hyperref ONCE, near the end
+\usepackage[colorlinks=true,
+            linkcolor=gray,
+            citecolor=blue,
+            filecolor=magenta,
+            urlcolor=gray]{hyperref}
+
+% ---- Footnotes: smaller + better layout
+\usepackage[hang,splitrule]{footmisc} % hanging number; nice split across columns
+\setlength{\footnotemargin}{1.2em}    % space between number and text
+\renewcommand\footnotelayout{\fontsize{8}{9.5}\selectfont} % smaller footnote text
+\setlength{\skip\footins}{6pt}        % space above footnote area
+\setlength{\footnotesep}{0.35\baselineskip} % space between footnotes
+
+\begin{document}
+\maketitle
+
+While experimenting with a Kademlia\footnote{\url{https://pdos.csail.mit.edu/~petar/papers/maymounkov-kademlia-lncs.pdf}} simulation, I started wondering: 
+since the identifier space is discrete, routing relies on the XOR metric, what would happen if I replace those with vectors (embeddings), and XOR distance with cosine distance?
+
+It turns out that this leads to a working simulation of a network that:
+\begin{itemize}
+  \item stores data in a decentralized manner,
+  \item allows semantic queries (e.g., in natural language),
+  \item replicates data near its “position” in embedding space,
+  \item adapts routing locally in response to queries and topology changes,
+  \item operates in a best-effort mode without guarantees of optimal routing.
+\end{itemize}
+
+For brevity:
+\begin{itemize}
+\item simulation driver: \url{https://github.com/artur-augustyniak/semantic_kademlia/blob/main/main.py},
+\item example run log: \url{https://github.com/artur-augustyniak/semantic_kademlia/blob/main/data/network.log}.
+\end{itemize}
+
+\vspace{-9pt}
+\subsection*{Embeddings without heavylifting}
+% \vspace{-6pt}
+
+I did not want to use heavy language models in this toy simulation. 
+Instead\footnote{\url{https://github.com/artur-augustyniak/semantic_kademlia/blob/afa05ea7ea70d76b0a6c4db4cc326a81c3acc764/tooling.py\#L65}}, 
+I ended up using Feature Hashing\footnote{\url{https://www.usna.edu/Users/cs/crabbe/SD311/2024/lectures/maps/feature.html}}/CountSketch\footnote{\url{https://proceedings.mlr.press/v139/larsen21a/larsen21a.pdf}}vectorizer.
+
+\algrenewcommand\algorithmicindent{0.6em}
+\algrenewcommand\algorithmicrequire{\textbf{In:}}
+\algrenewcommand\algorithmicensure{\textbf{Out:}}
+
+\begin{algorithm}
+% \scriptsize
+\captionsetup{font=scriptsize}
+\caption{Lexical embedding via CountSketch over character n-grams}
+\label{alg:countsketch-embedding}
+\begin{algorithmic}
+\Require text $t$, embedding dimension $d$
+\Ensure vector $\mathbf{v} \in \mathbb{R}^d$
+
+\State $t \gets \text{lowercase}(\text{trim}(t))$
+\If{$t$ is empty}
+    \State \Return $\mathbf{0} \in \mathbb{R}^d$
+\EndIf
+
+\State $t \gets \langle t \rangle$ \Comment{add boundary markers}
+\State $\mathbf{v} \gets \mathbf{0} \in \mathbb{R}^d$
+
+\For{$n \in \{2,3,4\}$}
+    \For{$i \gets 0$ to $|t| - n$}
+        \State $g \gets t[i : i+n]$
+        \State $h \gets \text{Hash}(g)$
+        \State $j \gets h \bmod d$
+        \State $s \gets
+        \begin{cases}
+            +1 & \text{if } \mathrm{bit}_{31}(h) = 0 \\
+            -1 & \text{otherwise}
+        \end{cases}$
+        \State $v_j \gets v_j + s$
+    \EndFor
+\EndFor
+
+\State $\mathbf{v} \gets \mathbf{v} / \|\mathbf{v}\|_2$
+\State \Return $\mathbf{v}$
+\end{algorithmic}
+\end{algorithm}
+
+The result is not "semantic" in the sense embedding models\footnote{\url{https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2}} - it a clever approximation of lexical similarity.
+Texts with similar structure end up close in the vector space, although there is no deeper representation of meaning.
+
+\vspace{-9pt}
+\subsection*{What is actually happening here}
+% \vspace{-6pt}
+
+The XOR metric has strong properties - it imposes a hierarchical structure and enables predictable narrowing of the search space. 
+In embedding space, these properties disappear: the fact that vector $B$ is closer to $C$ than $A$ does not imply that its neighbors will also be closer with respect to $C$. 
+
+So, I do not expect stable, globally correct routing. I treat the network as an adaptive system that builds its structure through queries and data replication\footnote{\url{https://github.com/artur-augustyniak/semantic_kademlia/blob/afa05ea7ea70d76b0a6c4db4cc326a81c3acc764/node.py\#L114}}.
+In local neighborhoods, a form of proximity transitivity often holds, which allows the network to gradually improve answer quality over time\footnote{\url{https://github.com/artur-augustyniak/semantic_kademlia/blob/afa05ea7ea70d76b0a6c4db4cc326a81c3acc764/node.py\#L268}}.
+
+The cost is longer search paths: queries require higher TTL values and more often end up in dead ends. However, I this effect is amortized over time - the routing table gradually move itself towards "hot" regions.
+
+This also motivates one nasty trick: pruning the routing table with respect to the most recently observed query or key\footnote{\url{https://github.com/artur-augustyniak/semantic_kademlia/blob/afa05ea7ea70d76b0a6c4db4cc326a81c3acc764/node.py\#L69}}. 
+This helps counteract the drift caused by random exploration, which is necessary to avoid blindness to new 
+nodes\footnote{\url{https://github.com/artur-augustyniak/semantic_kademlia/blob/afa05ea7ea70d76b0a6c4db4cc326a81c3acc764/node.py\#L418}}, but at the same time degrades locality.
+
+These issues become more pronounced as dimensionality increases. The curse of dimensionality\footnote{\url{https://en.wikipedia.org/wiki/Curse_of_dimensionality}} causes distances to become less discriminative, weakening 
+the routing signal. At the same time, higher dimensionality reduces collisions in the embedding, improving representation quality\footnote{\url{https://github.com/artur-augustyniak/semantic_kademlia/blob/afa05ea7ea70d76b0a6c4db4cc326a81c3acc764/main.py\#L26}}, 
+but worsening geometric properties relevant for routing - leading to a trade-off between embedding quality and the “navigability” of the space.
+
+Additionally, unlike classical Kademlia where hashing enforces a near-uniform distribution of data, here semantic clustering emerges naturally, leading to uneven load.
+At the same time, this makes the system manipulable in an interesting way: since node identifiers are vectors, one can deliberately choose an ID that lies close to a particular region of the embedding space, effectively making a node “attract” specific kinds of data.
+
+I came across prior work on similar ideas\footnote{\url{https://gist.github.com/ostafen/a556180db7d4c41abb325b5ae5e13ca4}}\footnote{\url{https://arxiv.org/html/2502.10151v1}}.
+These are significantly more formal and comprehensive than the simple simulation presented here, and they focus on addressing locality and clustering issues.
+
+It may be beneficial to impose additional structure - for example, 
+via a BSP-like partitioning - in order to introduce a partial hierarchy and improve routing properties.
+But Maybe, in some cases an alternative is to accept these properties and explore how they can be turned into a feature rather than a limitation.
+
+
+
+
+
+
+
+
+
+\end{document}
+
